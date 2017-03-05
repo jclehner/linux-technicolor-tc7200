@@ -1,0 +1,110 @@
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+	compatible = "brcm,bcm3383-viper";
+
+	memory@0 {
+		device_type = "memory";
+
+		/* Typical ranges.  The bootloader should fill these in. */
+		reg = <0 0>;
+	};
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		/* 1/2 of the CPU core clock (standard MIPS behavior) */
+		mips-hpt-frequency = <300000000>;
+
+		cpu@0 {
+			compatible = "brcm,bmips4350";
+			device_type = "cpu";
+			reg = <0>;
+		};
+	};
+
+	cpu_intc: interrupt-controller {
+		#address-cells = <0>;
+		compatible = "mti,cpu-interrupt-controller";
+
+		interrupt-controller;
+		#interrupt-cells = <1>;
+	};
+
+	clocks {
+		periph_clk: periph_clk {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <50000000>;
+		};
+	};
+
+	aliases {
+		uart0 = &uart0;
+	};
+
+	ubus {
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		compatible = "brcm,ubus", "simple-bus";
+		ranges;
+		/* No dma-ranges on Viper. */
+
+		periph_intc: interrupt-controller@14e00048 {
+			compatible = "brcm,bcm3380-l2-intc";
+			reg = <0x14e00048 0x4 0x14e0004c 0x4>;
+			interrupt-controller;
+			#interrupt-cells = <1>;
+			interrupt-parent = <&cpu_intc>;
+			interrupts = <4>;
+		};
+
+		uart0: serial@14e00500 {
+			compatible = "brcm,bcm6345-uart";
+			reg = <0x14e00500 0x18>;
+			interrupt-parent = <&periph_intc>;
+			interrupts = <2>;
+			clocks = <&periph_clk>;
+			status = "disabled";
+		};
+
+		ehci: usb@12e00200 {
+			compatible = "brcm,bcm3384-ehci", "generic-ehci";
+			reg = <0x12e00200 0x100>;
+			big-endian;
+			interrupt-parent = <&periph_intc>;
+			interrupts = <24>;
+			needs-reset-on-resume;
+			status = "disabled";
+		};
+
+		spi: spi@14e01000 {
+			compatible = "brcm,bcm6328-hsspi";
+			reg = <0x14e01000 0x100>;
+
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			interrupt-parent = <&periph_intc>;
+			interrupts = <7>;
+
+			status = "disabled";
+		};
+
+		nand: nand@14e02200 {
+			compatible = "brcm,brcmnand", "brcm,brcmnand-v4.0";
+			reg-names = "nand", "nand-cache";
+			reg = <0x14e02200 0xf4>, <0x14e02600 0x1000>;
+
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			interrupt-parent = <&periph_intc>;
+			interrupts = <31>;
+
+			status = "disabled";
+		};
+	};
+};
