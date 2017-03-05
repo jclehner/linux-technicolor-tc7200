@@ -77,6 +77,10 @@ config DT_SFR_NEUFBOX6_SERCOMM
 	bool "SFR Neufbox 6 (Sercomm)"
 	select BUILTIN_DTB
 
+config DT_TECHNICOLOR_TC7200_VIPER
+	bool "Technicolor TC7200 (Viper)"
+	select BUILTIN_DTB
+
 endchoice
 
 endif
