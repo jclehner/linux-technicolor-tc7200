@@ -38,6 +38,26 @@
 };
 
 &nand {
-	status = "okay";
+	status = "disabled";
+
+	nandcs@1 {
+		compatible = "brcm,nandcs";
+		reg = <1>;
+
+		nand-on-flash-bbt;
+		nand-ecc-strength = <4>;
+		nand-ecc-step-size = <512>;
+		//brcm,nand-oob-sector-size = <16>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			flash@0 {
+				reg = <0 0>;
+			};
+		};
+	};
 };
 

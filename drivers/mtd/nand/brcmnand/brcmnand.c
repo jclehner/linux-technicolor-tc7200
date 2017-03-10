@@ -1000,7 +1000,7 @@ static int brcmstb_choose_ecc_layout(struct brcmnand_host *host)
 	 *  >= v5.0: ECC_REQ = ceil(BCH_T * 14/8)
 	 * But we will just be conservative.
 	 */
-	ecc->bytes = DIV_ROUND_UP(ecc_level * 14, 8);
+	ecc->bytes = DIV_ROUND_UP(ecc_level * 13, 8);
 	if (p->page_size == 512)
 		mtd_set_ooblayout(mtd, &brcmnand_bch_sp_ooblayout_ops);
 	else

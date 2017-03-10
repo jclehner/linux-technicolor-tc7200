@@ -1,5 +1,41 @@
 ### Linux on Technicolor TC7200
 
+This is an attempt to port Linux to the Technicolor TC7200 cable modem. While the
+DOCSIS part is a lost cause, the device specs would make for a nice WiFi router:
+
+* 600 MHz Broadcom 4350 CPU
+* 128 MB DDR RAM
+* 64 MB NAND flash
+* 1 MB SPI-NOR flash
+* 4-port Gigabit Ethernet switch
+* Broadcom 43xx WiFi chip (in PCIe slot, exchangable)
+
+Build requirements:
+
+* MIPS toolchain (on Ubuntu, run `apt install gcc-mips-linux-gnu`)
+* Build `ProgramStore` from https://github.com/Broadcom/aeolus, and put it in your `PATH`
+
+Then run `make -f tc7200.mk`. The `linux.sto` file can be flashed via TFTP from the 
+modem's bootloader (serial console access is required).
+
+###### Working
+
+* UART
+* USB
+* Reboot
+
+###### Partially working
+
+* CPU speed is abysmally slow, for some reason
+* NAND (flash is detected, but commands time out)
+
+###### Not working
+
+* SPI
+* Ethernet
+* PCIe
+* WiFi
+
 ```
 [    0.000000] Linux version 4.10.0+ (user@host) (gcc version 6.2.1 20161124 (Ubuntu 6.2.1-5ubuntu1) ) #9 SMP Sun Mar 5 12:23:58 CET 2017
 [    0.000000] CPU0 revision is: 0002a080 (Broadcom BMIPS4350)

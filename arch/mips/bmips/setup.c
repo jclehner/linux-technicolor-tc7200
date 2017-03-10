@@ -34,6 +34,14 @@
 #define REG_BCM6328_OTP		((void __iomem *)CKSEG1ADDR(0x1000062c))
 #define BCM6328_TP1_DISABLED	BIT(9)
 
+#define BCM3383_USB_UBUS_CLK_EN	(1 << 7)
+#define BCM3383_USB_CLK_EN		(1 << 7)
+#define BCM3383_NAND_CLK_EN		(1 << 17)
+#define BCM3383_SFTRST			(1 << 6)
+#define BCM3383_IOC				(1 << 4)
+#define BCM3383_GPIO_USB0_PWRON	(1 << 2)
+#define BCM3383_GPIO_USB1_PWRON	(1 << 4)
+
 static const unsigned long kbase = VMLINUX_LOAD_ADDRESS & 0xfff00000;
 
 struct bmips_quirk {
@@ -68,6 +76,57 @@ static void bcm3384_viper_quirks(void)
 	 */
 	board_ebase_setup = &kbase_setup;
 	bmips_smp_enabled = 0;
+}
+
+/* 
+ * XXX this should be moved to a separate bcm3383 clock driver
+ */
+static void bcm3383_fixup_usb(void)
+{
+	volatile u32 *gpio_data_hi = (u32*)0xb4e0018c;
+
+	volatile struct bcm3383_usb {
+		u32 ctrl_setup;
+		u32 pll_ctrl_1;
+		u32 fladj_val;
+		u32 swap_ctrl;
+	} *usb = (struct bcm3383_usb*)0xb2e00200;
+
+	volatile struct bcm3383_intc {
+		u32 rev_id;
+		u32 clk_ctrl_low;
+		u32 clk_ctrl_high;
+		u32 clk_ctrl_ubus;
+	} *intc = (struct bcm3383_intc*)0xb4e00000;
+
+	unsigned i;
+
+	/* enable ubus USB clock */
+	intc->clk_ctrl_ubus |= BCM3383_USB_UBUS_CLK_EN;
+
+	/* enable USB clocks */
+	intc->clk_ctrl_low |= BCM3383_USB_CLK_EN;
+
+	/* reset USB controller */
+	usb->ctrl_setup |= BCM3383_SFTRST;
+	for (; i < 1000; ++i);
+	usb->ctrl_setup &= ~BCM3383_SFTRST;
+
+	/* set polarity */
+	usb->ctrl_setup |= BCM3383_IOC;
+
+	/* ?? */
+	usb->swap_ctrl |= 0x9;
+	usb->pll_ctrl_1 = 0x512750c0;
+
+	/* power on usb ports */
+	*gpio_data_hi |= BCM3383_GPIO_USB0_PWRON | BCM3383_GPIO_USB1_PWRON;
+}
+
+
+static void bcm3383_quirks(void)
+{
+	bcm3383_fixup_usb();
 }
 
 static void bcm63xx_fixup_cpu1(void)
@@ -112,6 +171,7 @@ static void bcm6368_quirks(void)
 
 static const struct bmips_quirk bmips_quirk_list[] = {
 	{ "brcm,bcm3368",		&bcm6358_quirks			},
+	{ "brcm,bcm3383-viper",		&bcm3383_quirks		},
 	{ "brcm,bcm3384-viper",		&bcm3384_viper_quirks		},
 	{ "brcm,bcm33843-viper",	&bcm3384_viper_quirks		},
 	{ "brcm,bcm6328",		&bcm6328_quirks			},

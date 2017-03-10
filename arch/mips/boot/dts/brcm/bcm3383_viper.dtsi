@@ -52,6 +52,19 @@
 		ranges;
 		/* No dma-ranges on Viper. */
 
+		timer: syscon@14e00010 {
+			compatible = "syscon";
+			reg = <0x14e00010 0x4>;
+			native-endian;
+		};
+
+		syscon-reboot {
+			compatible = "syscon-reboot";
+			regmap = <&timer>;
+			offset = <0x0>;
+			mask = <0x1>;
+		};
+
 		periph_intc: interrupt-controller@14e00048 {
 			compatible = "brcm,bcm3380-l2-intc";
 			reg = <0x14e00048 0x4 0x14e0004c 0x4>;
@@ -70,13 +83,12 @@
 			status = "disabled";
 		};
 
-		ehci: usb@12e00200 {
+		ehci: usb@12e00000 {
 			compatible = "brcm,bcm3384-ehci", "generic-ehci";
-			reg = <0x12e00200 0x100>;
+			reg = <0x12e00000 0x100>;
 			big-endian;
 			interrupt-parent = <&periph_intc>;
 			interrupts = <24>;
-			needs-reset-on-resume;
 			status = "disabled";
 		};
 
@@ -94,17 +106,55 @@
 		};
 
 		nand: nand@14e02200 {
-			compatible = "brcm,brcmnand", "brcm,brcmnand-v4.0";
+			compatible = "brcm,brcmnand-v4.0", "brcm,brcmnand";
 			reg-names = "nand", "nand-cache";
-			reg = <0x14e02200 0xf4>, <0x14e02600 0x1000>;
+			reg = <0x14e02200 0xf4>, <0x14e02600 0x200>;
 
 			#address-cells = <1>;
 			#size-cells = <0>;
 
 			interrupt-parent = <&periph_intc>;
-			interrupts = <31>;
+			interrupts = <12>;
 
 			status = "disabled";
+		};
+
+		pcie0: pcie@12800000 {
+			compatilble = "pci";
+			reg = <0x12800000 0x400000>;
+		};
+
+		ethernet: ethernet@12c02600 {
+			compatible = "brcm,genet-v1";
+			reg = <0x12c02600 0x2000>;
+
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			interrupt-parent = <&periph_intc>;
+			interrupts = <26>;
+
+			phy-mode = "rgmii";
+			phy-handle = <&phy0>;
+			mac-address = [ 00 10 95 de ad 07 ];
+
+			status = "okay";
+
+			mdio@0e14 {
+				compatible = "brcm,genet-mdio-v1";
+				reg = <0xe14 0x8>;
+
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				phy0: ethernet-phy@0 {
+					compatible = "ethernet-phy-ieee802.3-c22";
+					reg = <0>;
+					max-speed = <1000>;
+				};
+			};
+
+
 		};
 	};
 };
