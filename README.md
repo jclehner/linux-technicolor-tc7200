@@ -22,12 +22,13 @@ modem's bootloader (serial console access is required).
 
 * UART
 * USB
+* NAND (but dmesg shows command timeout)
 * Reboot
+* Dual Core
 
 ###### Partially working
 
 * CPU speed is abysmally slow, for some reason
-* NAND (flash is detected, but commands time out)
 
 ###### Not working
 

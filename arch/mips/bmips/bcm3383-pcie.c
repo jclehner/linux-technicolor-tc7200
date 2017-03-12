@@ -240,7 +240,7 @@ static void bcm3383_init_pcie(int port)
 
 	pr_info("%s: link=%d\n", __func__, link);
 
-	base += 0x9000;
+	//base += 0x9000;
 
 	pr_info("%s: 00:00.0 [%08x]\n", __func__, *(volatile u32*)base);
 	bcm3383_pcie_cfg_select(1, 0);
