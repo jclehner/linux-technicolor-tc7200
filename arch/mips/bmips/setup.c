@@ -158,7 +158,7 @@ static void bcm3383_init_nand(void)
 
 static void bcm63xx_fixup_cpu1(void);
 
-#include "bcm3383-pci.c"
+#include "bcm3383-pcie.c"
 
 static void bcm3383_quirks(void)
 {
@@ -211,7 +211,7 @@ static void bcm6368_quirks(void)
 
 static const struct bmips_quirk bmips_quirk_list[] = {
 	{ "brcm,bcm3368",		&bcm6358_quirks			},
-	{ "brcm,bcm3383-viper",		&bcm3383_quirks		},
+	{ "brcm,bcm3383",		&bcm3383_quirks		},
 	{ "brcm,bcm3384-viper",		&bcm3384_viper_quirks		},
 	{ "brcm,bcm33843-viper",	&bcm3384_viper_quirks		},
 	{ "brcm,bcm6328",		&bcm6328_quirks			},

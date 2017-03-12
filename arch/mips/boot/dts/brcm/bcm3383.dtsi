@@ -1,7 +1,7 @@
 / {
 	#address-cells = <1>;
 	#size-cells = <1>;
-	compatible = "brcm,bcm3383-viper";
+	compatible = "brcm,bcm3383";
 
 	memory@0 {
 		device_type = "memory";

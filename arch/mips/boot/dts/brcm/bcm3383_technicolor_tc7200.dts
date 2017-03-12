@@ -1,10 +1,10 @@
 /dts-v1/;
 
-/include/ "bcm3383_viper.dtsi"
+/include/ "bcm3383.dtsi"
 
 / {
-	compatible = "technicolor,tc7200-viper", "brcm,bcm3383-viper";
-	model = "Technicolor TC7200 (Viper)";
+	compatible = "technicolor,tc7200", "brcm,bcm3383";
+	model = "Technicolor TC7200";
 
 	memory@0 {
 		device_type = "memory";
