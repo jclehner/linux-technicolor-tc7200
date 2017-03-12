@@ -81,7 +81,41 @@ static void bcm3384_viper_quirks(void)
 /* 
  * XXX this should be moved to a separate bcm3383 clock driver
  */
-static void bcm3383_fixup_usb(void)
+
+struct bcm3383_interrupt
+{
+	u32 mask;
+	u32 status;
+};
+
+volatile struct bcm3383_intc {
+	u32 rev_id;
+	u32 clk_ctrl_low;
+	u32 clk_ctrl_high;
+	u32 clk_ctrl_ubus;
+	u32 timer_ctrl;
+	struct bcm3383_interrupt docsis_irq[3];
+	u32 int_periph_irq_status;
+	struct bcm3383_interrupt periph_irq[4];
+	struct bcm3383_interrupt iop_irq[2];
+	u32 docsis_irq_sense;
+	u32 periph_irq_sense;
+	u32 iop_irq_sense;
+	u32 ext0_irq_ctrl;
+	u32 diag_ctrl;
+	u32 ext1_irq_ctrl;
+	u32 irq_out_mask;
+	u32 diag_select_ctrl;
+	u32 diag_read_back_low;
+	u32 diag_read_back_high;
+	u32 diag_misc_ctrl;
+	u32 soft_resetb_low;
+	u32 soft_resetb_high;
+	u32 soft_reset;
+	u32 ext_irq_mux_select;
+} *bcm3383_intc = (struct bcm3383_intc*)0xb4e00000;
+
+static void bcm3383_init_usb(void)
 {
 	volatile u32 *gpio_data_hi = (u32*)0xb4e0018c;
 
@@ -92,20 +126,13 @@ static void bcm3383_fixup_usb(void)
 		u32 swap_ctrl;
 	} *usb = (struct bcm3383_usb*)0xb2e00200;
 
-	volatile struct bcm3383_intc {
-		u32 rev_id;
-		u32 clk_ctrl_low;
-		u32 clk_ctrl_high;
-		u32 clk_ctrl_ubus;
-	} *intc = (struct bcm3383_intc*)0xb4e00000;
-
 	unsigned i;
 
 	/* enable ubus USB clock */
-	intc->clk_ctrl_ubus |= BCM3383_USB_UBUS_CLK_EN;
+	bcm3383_intc->clk_ctrl_ubus |= BCM3383_USB_UBUS_CLK_EN;
 
 	/* enable USB clocks */
-	intc->clk_ctrl_low |= BCM3383_USB_CLK_EN;
+	bcm3383_intc->clk_ctrl_low |= BCM3383_USB_CLK_EN;
 
 	/* reset USB controller */
 	usb->ctrl_setup |= BCM3383_SFTRST;
@@ -123,10 +150,23 @@ static void bcm3383_fixup_usb(void)
 	*gpio_data_hi |= BCM3383_GPIO_USB0_PWRON | BCM3383_GPIO_USB1_PWRON;
 }
 
+static void bcm3383_init_nand(void)
+{
+	bcm3383_intc->clk_ctrl_ubus |= BCM3383_NAND_CLK_EN;
+	bcm3383_intc->clk_ctrl_low |= BCM3383_NAND_CLK_EN;
+}
+
+static void bcm63xx_fixup_cpu1(void);
+
+#include "bcm3383-pci.c"
 
 static void bcm3383_quirks(void)
 {
-	bcm3383_fixup_usb();
+	bcm3383_init_usb();
+	bcm3383_init_nand();
+	bcm3383_init_pcie(0);
+	bcm3383_init_pcie(1);
+	bcm63xx_fixup_cpu1();
 }
 
 static void bcm63xx_fixup_cpu1(void)

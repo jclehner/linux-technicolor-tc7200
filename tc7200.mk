@@ -14,13 +14,11 @@ linux.sto:
 cpio:
 
 uncpio:
-	mkdir -p rootfs
-	cd rootfs
-	cpio -i < ../tc7200-rootfs.cpio
+	rm -fr rootfs && mkdir rootfs
+	cd rootfs; sudo cpio -i -R ${USER} < ../tc7200-rootfs.cpio
 
 cpio:
-	cd rootfs
-	cpio -H newc -o * > ../tc7200-rootfs.cpio
+	cd rootfs; find . | cpio -H newc -o > ../tc7200-rootfs.cpio
 
 defconfig:
 	make ARCH=mips CROSS_COMPILE=$(CROSS_COMPILE) bmips_be_defconfig

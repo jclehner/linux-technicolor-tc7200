@@ -15,12 +15,20 @@
 		#size-cells = <0>;
 
 		/* 1/2 of the CPU core clock (standard MIPS behavior) */
-		mips-hpt-frequency = <300000000>;
+		//mips-hpt-frequency = <300000000>;
+		//mips-hpt-frequency = <637200000>;
+		mips-hpt-frequency = <318600000>;
 
 		cpu@0 {
 			compatible = "brcm,bmips4350";
 			device_type = "cpu";
 			reg = <0>;
+		};
+
+		cpu@1 {
+			compatible = "brcm,bmips4350";
+			device_type = "cpu";
+			reg = <1>;
 		};
 	};
 
@@ -74,6 +82,15 @@
 			interrupts = <4>;
 		};
 
+		iop_intc: interrupt-controller@14e00058 {
+			compatible = "brcm,bcm3380-l2-intc";
+			reg = <0x14e00058 0x4 0x14e0005c 0x4>;
+			interrupt-controller;
+			#interrupt-cells = <1>;
+			interrupt-parent = <&cpu_intc>;
+			interrupts = <5>;
+		};
+
 		uart0: serial@14e00500 {
 			compatible = "brcm,bcm6345-uart";
 			reg = <0x14e00500 0x18>;
@@ -113,15 +130,22 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			interrupt-parent = <&periph_intc>;
-			interrupts = <12>;
+			interrupt-parent = <&iop_intc>;
+			interrupts = <3>;
 
 			status = "disabled";
 		};
 
 		pcie0: pcie@12800000 {
-			compatilble = "pci";
-			reg = <0x12800000 0x400000>;
+			compatible = "pci-host-ecam-generic";
+			device_type = "pci";
+			reg = <0x0 0x12800000 0x0 0x200000>;
+			ranges = <0x01000000 0x0 0x01000000  0x0 0x01000000  0x0 0x00010000>;
+
+			#address-cells = <3>;
+			#size-cells = <2>;
+
+			status = "okay";
 		};
 
 		ethernet: ethernet@12c02600 {
@@ -140,9 +164,9 @@
 
 			status = "okay";
 
-			mdio@0e14 {
+			mdio@10 {
 				compatible = "brcm,genet-mdio-v1";
-				reg = <0xe14 0x8>;
+				reg = <0x10 0x10>;
 
 				#address-cells = <1>;
 				#size-cells = <0>;
