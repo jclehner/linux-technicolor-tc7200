@@ -158,15 +158,13 @@ static void bcm3383_init_nand(void)
 
 static void bcm63xx_fixup_cpu1(void);
 
-#include "bcm3383-pcie.c"
-
 static void bcm3383_quirks(void)
 {
+	write_c0_status(IE_IRQ5 | read_c0_status());
+	bcm63xx_fixup_cpu1();
+
 	bcm3383_init_usb();
 	bcm3383_init_nand();
-	bcm3383_init_pcie(0);
-	bcm3383_init_pcie(1);
-	bcm63xx_fixup_cpu1();
 }
 
 static void bcm63xx_fixup_cpu1(void)
