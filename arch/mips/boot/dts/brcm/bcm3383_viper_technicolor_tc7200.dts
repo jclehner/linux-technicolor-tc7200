@@ -1,0 +1,93 @@
+/dts-v1/;
+
+/include/ "bcm3383_viper.dtsi"
+
+/ {
+	compatible = "technicolor,tc7200-viper", "brcm,bcm3383-viper";
+	model = "Technicolor TC7200 (Viper)";
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x00000000 0x08000000>;
+	};
+
+	chosen {
+		bootargs = "console=ttyS0,115200";
+		stdout-path = &uart0;
+	};
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&ehci {
+	status = "okay";
+};
+
+&spi {
+	status = "okay";
+	
+	mp25p80@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "mx25l8008e";
+		spi-max-frequency = <10000000>;
+		reg = <0 0>;
+	};
+};
+
+&nand {
+	status = "okay";
+
+	nandcs@0 {
+		compatible = "brcm,nandcs";
+		reg = <0>;
+
+		nand-on-flash-bbt;
+		nand-ecc-strength = <4>;
+		nand-ecc-step-size = <512>;
+		//brcm,nand-oob-sector-size = <16>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			flash@0 {
+				reg = <0 0>;
+			};
+
+			partiton@0 {
+				reg = <0 0x19c0000>;
+				label = "linuxapps";
+			};
+
+			partition@19c0000 {
+				reg = <0x19c0000 0x6c0000>;
+				label = "image1";
+			};
+
+			partition@2080000 {
+				reg = <0x2080000 0x6c0000>;
+				label = "image2";
+			};
+
+			partition@2740000 {
+				reg = <0x2740000 0x480000>;
+				label = "linux";
+			};
+
+			partition@2bc0000 {
+				reg = <0x2bc0000 0x1200000>;
+				label = "linuxkfs";
+			};
+
+			partition@3dc0000 {
+				reg = <0x3dc0000 0x240000>;
+				label = "dhtml";
+			};
+		};
+	};
+};
+

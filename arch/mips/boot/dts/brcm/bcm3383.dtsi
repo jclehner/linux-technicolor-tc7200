@@ -17,7 +17,9 @@
 		/* 1/2 of the CPU core clock (standard MIPS behavior) */
 		//mips-hpt-frequency = <300000000>;
 		//mips-hpt-frequency = <637200000>;
-		mips-hpt-frequency = <318600000>;
+		//mips-hpt-frequency = <318600000>;
+		//mips-hpt-frequency = <159300000>;
+		mips-hpt-frequency = <500000000>;
 
 		cpu@0 {
 			compatible = "brcm,bmips4350";
@@ -25,13 +27,11 @@
 			reg = <0>;
 		};
 
-		/*
 		cpu@1 {
 			compatible = "brcm,bmips4350";
 			device_type = "cpu";
 			reg = <1>;
 		};
-		*/
 	};
 
 	cpu_intc: interrupt-controller {
@@ -79,6 +79,15 @@
 			regmap = <&timer>;
 			offset = <0x0>;
 			mask = <0x1>;
+		};
+
+		periph_intc0: interrupt-controller@14e00040 {
+			compatible = "brcm,bcm3380-l2-intc";
+			reg = <0x14e00040 0x4 0x14e00044 0x4>;
+			interrupt-controller;
+			#interrupt-cells = <1>;
+			interrupt-parent = <&cpu_intc>;
+			interrupts = <3>;
 		};
 
 		periph_intc: interrupt-controller@14e00048 {
@@ -133,6 +142,15 @@
 			status = "disabled";
 		};
 
+		i2c: i2c@14e00e00 {
+			compatible = "brcm,brcmstb-i2c";
+			reg = <0x14e00e00 0x100>;
+			interrupt-parent = <&periph_intc>;
+			interrupts = <6>;
+
+			status = "okay";
+		};
+
 		nand: nand@14e02200 {
 			compatible = "brcm,brcmnand-v4.0", "brcm,brcmnand";
 			reg-names = "nand", "nand-cache";
@@ -157,12 +175,15 @@
 			#address-cells = <3>;
 			#size-cells = <2>;
 
+			interrupt-parent = <&periph_intc>;
+			interrupts = <15>;
+
 			status = "okay";
 		};
 
-		ethernet: ethernet@12c02600 {
+		ethernet: ethernet@12c00000 {
 			compatible = "brcm,genet-v1";
-			reg = <0x12c02600 0x2000>;
+			reg = <0x12c02000 0x2000>;
 
 			#address-cells = <1>;
 			#size-cells = <1>;

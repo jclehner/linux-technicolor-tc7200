@@ -115,6 +115,8 @@ volatile struct bcm3383_intc {
 	u32 ext_irq_mux_select;
 } *bcm3383_intc = (struct bcm3383_intc*)0xb4e00000;
 
+extern void bcm3383_pinmux_select(int index);
+
 static void bcm3383_init_usb(void)
 {
 	volatile u32 *gpio_data_hi = (u32*)0xb4e0018c;
@@ -160,8 +162,32 @@ static void bcm63xx_fixup_cpu1(void);
 
 static void bcm3383_quirks(void)
 {
+	//volatile u32 *reg;
+
 	write_c0_status(IE_IRQ5 | read_c0_status());
 	bcm63xx_fixup_cpu1();
+
+	bcm3383_pinmux_select(10);
+
+#if 0
+	bcm3383_intc->clk_ctrl_low = 0xf636f04b;
+	bcm3383_intc->clk_ctrl_high = 0xff;
+	bcm3383_intc->clk_ctrl_ubus = 0x7ffff;
+
+	reg = (u32*)0xb4e001c8;
+
+	*reg = (*reg & 0xe3ffffff) | 0x04000000;
+	*reg = (*reg & 0xfc7fffff) | 0x00800000;
+
+	reg = (u32*)0xb4e001c4;
+
+	*reg = (*reg & 0xfffffff1) | 0x0000000a;
+
+	*(u32*)(0xb2000238) = 0x170;
+	*(u32*)(0xb20005a0) = 0xfffff;
+	*(u8*)(0xb4e00048 + 3) &= 0xf7; 
+	*(u32*)(0xb4e00530) = 0;
+#endif
 
 	bcm3383_init_usb();
 	bcm3383_init_nand();
