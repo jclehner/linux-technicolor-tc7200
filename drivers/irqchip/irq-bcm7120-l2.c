@@ -64,6 +64,11 @@ static void bcm7120_l2_intc_irq_handle(struct irq_desc *desc)
 
 	chained_irq_enter(chip, desc);
 
+	if (desc->irq_data.irq != 4) {
+		pr_info("%s: irq=%d, hwirq=%ld, parent=%d\n", __func__,
+				desc->irq_data.irq, desc->irq_data.hwirq, desc->parent_irq);
+	}
+
 	for (idx = 0; idx < b->n_words; idx++) {
 		int base = idx * IRQS_PER_WORD;
 		struct irq_chip_generic *gc =

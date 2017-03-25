@@ -158,6 +158,25 @@ static void bcm3383_init_nand(void)
 	bcm3383_intc->clk_ctrl_low |= BCM3383_NAND_CLK_EN;
 }
 
+static void bcm3383_init_gmac(void)
+{
+	bcm3383_intc->soft_resetb_low &= ~((1 << 6) | (1 << 8));
+	bcm3383_intc->clk_ctrl_low |= (1 << 6);
+	bcm3383_intc->clk_ctrl_high |= (1 << 8);
+	mdelay(200);
+	bcm3383_intc->soft_resetb_low |= ((1 << 6) | (1 << 8));
+
+#if 0
+	bcm3383_intc->clk_ctrl_low |= (1 << 1);
+	mdelay(100);
+	bcm3383_intc->clk_ctrl_low |= (1 << 11);
+	mdelay(100);
+	bcm3383_intc->clk_ctrl_ubus |= (1 << 8);
+	bcm3383_intc->clk_ctrl_high |= (1 << 8);
+	bcm3383_intc->clk_ctrl_low |= (1 << 6) | (1 << 8);
+#endif
+}
+
 static void bcm63xx_fixup_cpu1(void);
 
 static void bcm3383_quirks(void)
@@ -191,6 +210,7 @@ static void bcm3383_quirks(void)
 
 	bcm3383_init_usb();
 	bcm3383_init_nand();
+	bcm3383_init_gmac();
 }
 
 static void bcm63xx_fixup_cpu1(void)

@@ -82,7 +82,7 @@
 		};
 
 		periph_intc0: interrupt-controller@14e00040 {
-			compatible = "brcm,bcm3380-l2-intc";
+			compatible = "brcm,bcm6345-l1-intc";
 			reg = <0x14e00040 0x4 0x14e00044 0x4>;
 			interrupt-controller;
 			#interrupt-cells = <1>;
@@ -107,6 +107,17 @@
 			interrupt-parent = <&cpu_intc>;
 			interrupts = <5>;
 		};
+
+/*
+		ext_intc: interrupt-controller@14e0006c {
+			compatible = "brcm,l2-intc";
+			reg = <0x14e0006c 0x4>;
+			interrupt-controller;
+			#interrupt-cells = <1>;
+			interrupt-parent = <&periph_intc>;
+			interrupts = <31>;
+		};
+*/
 
 		uart0: serial@14e00500 {
 			compatible = "brcm,bcm6345-uart";
@@ -159,47 +170,47 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			interrupt-parent = <&iop_intc>;
-			interrupts = <3>;
+			//interrupt-parent = <&iop_intc>;
+			//interrupts = <3>;
 
 			status = "disabled";
 		};
 
 		pcie: pcie@12800000 {
 			compatible = "brcm,bcm3383-pci";
-			device_type = "pci";
-			reg = <0x0 0x12800000 0x0 0x200000>;
-			ranges = <0x01000000 0x0 0x01000000  0x0 0x01000000  0x0 0x00010000>;
-			bus-range = <1 2>;
+			reg = <0x12800000 0x400000>;
+			//bus-range = <1 2>;
 
 			#address-cells = <3>;
 			#size-cells = <2>;
 
+			ranges = <0x02000000 0 0xa0000000 0xa0000000 0 0x10000000>;
+
 			interrupt-parent = <&periph_intc>;
-			interrupts = <15>;
+			interrupts = <15 16>;
 
 			status = "okay";
 		};
 
 		ethernet: ethernet@12c00000 {
 			compatible = "brcm,genet-v1";
-			reg = <0x12c02000 0x2000>;
+			reg = <0x12c00000 0x4000>;
 
 			#address-cells = <1>;
 			#size-cells = <1>;
 
 			interrupt-parent = <&periph_intc>;
-			interrupts = <26>;
+			interrupts = <0 16 0>, <0 17 0>;
 
-			phy-mode = "rgmii";
+			phy-mode = "internal";
 			phy-handle = <&phy0>;
 			mac-address = [ 00 10 95 de ad 07 ];
 
 			status = "okay";
 
-			mdio@10 {
+			mdio@600 {
 				compatible = "brcm,genet-mdio-v1";
-				reg = <0x10 0x10>;
+				reg = <0x600 0x10>;
 
 				#address-cells = <1>;
 				#size-cells = <0>;

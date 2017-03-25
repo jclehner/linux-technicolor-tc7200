@@ -60,42 +60,43 @@ typedef struct
 		BCM3383_PCIE_REG(port, 0x8300))
 
 
+#define BRIDGE 0
+#define DEVICE 1
+
+//#define IOREMAP
+
+#ifdef IOREMAP
+static void __iomem *base_addr[2];
+#else
+static u32 base_addr[2];
+#endif
+
 static u32 bcm3383_pcie_base[2] = { BCM3383_PCIE0_BASE, 0xb2a00000 };
 
-static inline u32 bcm3383_pcie_bus_base(u32 bus)
-{
-	/* bus 0 is mpi root, bus 1 is pcie0 root, bus 3 is pcie1 root */
-	//BUG_ON(!bus);
-	return bus < 3 ? BCM3383_PCIE0_BASE : BCM3383_PCIE1_BASE;
-}
 
 #define PCIE_DEV_OFFSET 0x9000
-
-static inline int bcm3383_bus_to_port(u8 bus)
-{
-	return bus < 2 ? 0 : 1;
-}
 
 static inline int bcm3383_is_root_bus(u8 bus)
 {
 	return bus == 0 || bus == 2;
 }
 
-static inline u32 bcm3383_pcie_dev_addr(u32 bus, int where)
+static inline int bcm3383_bus_to_port(u8 bus)
 {
-	u32 addr = bcm3383_pcie_bus_base(bus) + 
-		(bus & 1 ? 0 : 0) + (where & ~3);
-	//pr_info("%s: addr=%08x\n", __func__, addr);
-	return addr;
+	return bus < 2 ? 0 : 1;
 }
 
-#define PCIE_EXT_CFG_REGS 0x8400
-
-static inline void bcm3383_pcie_cfg_select(u8 bus, unsigned devfn)
+#ifdef IOREMAP
+static inline void __iomem *pcie_base(struct pci_bus *bus)
 {
-	*BCM3383_PCIE_EXT_CFG_REGS(bcm3383_bus_to_port(bus), 0x0) = bus << 20
-		| PCI_SLOT(devfn) << 15 | PCI_FUNC(devfn) << 12;
+	return base_addr[bus->number == 0 ? BRIDGE : DEVICE];
 }
+#else
+static inline u32 pcie_base(struct pci_bus *bus)
+{
+	return base_addr[bus->number == 0 ? BRIDGE : DEVICE];
+}
+#endif
 
 static inline volatile u32 *bcm3383_pcie_get_addr(u8 bus, int where)
 {
@@ -104,6 +105,64 @@ static inline volatile u32 *bcm3383_pcie_get_addr(u8 bus, int where)
 	}
 
 	return BCM3383_PCIE_REG(bcm3383_bus_to_port(bus), where & ~3);
+}
+
+static void check_reg(u32 reg, const char *where)
+{
+	if (reg & 3) {
+		pr_warn("%s: bad register %04x\n", where, reg);
+	}
+}
+
+#define CHECK_REG(reg) check_reg(reg, __func__)
+
+static inline int bcm3383_dev_to_port(struct pci_dev *dev)
+{
+	return bcm3383_bus_to_port(dev->bus->number);
+}
+
+static inline void pcie_core_w32(u32 reg, u32 val)
+{
+#ifdef IOREMAP
+	iowrite32be(val, base_addr[BRIDGE] + reg);
+#else
+	*(volatile u32*)(base_addr[BRIDGE] + reg) = val;
+#endif
+}
+
+static inline u32 pcie_core_r32(u32 reg)
+{
+#ifdef IOREMAP
+	return ioread32be(base_addr[BRIDGE] + reg);
+#else
+	return *(volatile u32*)(base_addr[BRIDGE] + reg);
+#endif
+}
+
+static inline void pcie_bus_w32(struct pci_bus *bus, u32 reg, u32 val)
+{
+#ifdef IOREMAP
+	iowrite32be(val, pcie_base(bus) + reg);
+#else
+	*(volatile u32*)(pcie_base(bus) + reg) = val;
+#endif
+}
+
+static inline u32 pcie_bus_r32(struct pci_bus *bus, u32 reg)
+{
+#ifdef IOREMAP
+	return ioread32be(pcie_base(bus) + reg);
+#else
+	return *(volatile u32*)(pcie_base(bus) + reg);
+#endif
+}
+
+#define PCIE_EXT_CFG_REGS 0x8400
+
+static inline void bcm3383_pcie_cfg_select(u8 bus, unsigned devfn)
+{
+	*BCM3383_PCIE_EXT_CFG_REGS(bcm3383_bus_to_port(bus), 0x0) = bus << 20
+		| PCI_SLOT(devfn) << 15 | PCI_FUNC(devfn) << 12;
 }
 
 typedef struct 
@@ -215,7 +274,7 @@ static int bcm3383_pcie_read(struct pci_bus *bus, unsigned devfn,
 
 	status = read_c0_config();
 	write_c0_config(status & ~1);
-	data = *bcm3383_pcie_get_addr(bus->number, where);
+	data = pcie_bus_r32(bus, where & ~3);
 	write_c0_config(status);
 
 	if (data == 0xdeaddead) {
@@ -236,8 +295,7 @@ static int bcm3383_pcie_read(struct pci_bus *bus, unsigned devfn,
 static int bcm3383_pcie_write(struct pci_bus *bus, unsigned devfn,
 		int where, int size, u32 val)
 {
-	u32 status;
-	volatile u32 *addr;
+	u32 status, data;
 	int err = PCIBIOS_DEVICE_NOT_FOUND;
 
 	if (!bcm3383_pcie_can_access(bus->number, devfn)) {
@@ -247,21 +305,22 @@ static int bcm3383_pcie_write(struct pci_bus *bus, unsigned devfn,
 	status = read_c0_config();
 	write_c0_config(status & ~1);
 
-	addr = bcm3383_pcie_get_addr(bus->number, where);
-	if (*addr == 0xdeaddead) {
+	data = pcie_bus_r32(bus, where & ~3);
+	if (data == 0xdeaddead) {
 		goto out;
 	}
 
 	if (size == 1) {
-		*addr = (*addr & ~(0xff << ((where & 3) << 3))) |
+		data = (data & ~(0xff << ((where & 3) << 3))) |
 			(val << ((where & 3) << 3));
 	} else if (size == 2) {
-		*addr = (*addr & ~(0xffff << ((where & 3) << 3))) |
+		data = (data & ~(0xffff << ((where & 3) << 3))) |
 			(val << ((where & 3) << 3));
 	} else {
-		*addr = val;
+		data = val;
 	}
 
+	pcie_bus_w32(bus, where & ~3, data);
 	err = PCIBIOS_SUCCESSFUL;
 out:
 	write_c0_config(status);
@@ -273,46 +332,24 @@ static struct pci_ops bcm3383_pcie_ops = {
 	.write = bcm3383_pcie_write
 };
 
-static struct resource bcm3383_io_resource = {
-	.name = "bcm3383 pcie io",
-	.start = 0,
-	.end = 0,
-	.flags = IORESOURCE_IO,
-};
+static struct resource bcm3383_res_pci_io;
+static struct resource bcm3383_res_pci_mem
+#ifndef OFMEM
+= {
+	.start = 0xa0000000,
+	.end = 0xa0000000 + 0x10000000 -1,
+	.flags = IORESOURCE_MEM,
+}
+#endif
+;
 
-static struct resource bcm3383_mem0_resource = {
-	.name = "bcm3383 pcie0 mem",
-	.start = BCM3383_PCIE0_BASE,
-	.end = BCM3383_PCIE0_BASE + 0x10000000 - 1,
-	.flags = IORESOURCE_MEM
-};
-
-static struct resource bcm3383_mem1_resource = {
-	.name = "bcm3383 pcie1 mem",
-	.start = BCM3383_PCIE1_BASE,
-	.end = BCM3383_PCIE1_BASE + 0x10000000 - 1,
-	.flags = IORESOURCE_MEM
-};
-
-static struct resource bcm3383_busn_resource = {
-	.name = "bcm3383 busn",
-	.start = 0,
-	.end = 255,
-	.flags = IORESOURCE_BUS
-};
-
-static struct pci_controller bcm3383_pcie0 = {
+static struct pci_controller bcm3383_controller = {
 	.pci_ops		= &bcm3383_pcie_ops,
-	.io_resource 	= &bcm3383_io_resource,
-	.mem_resource	= &bcm3383_mem0_resource,
-	.busn_resource	= &bcm3383_busn_resource,
-};
-
-static struct pci_controller bcm3383_pcie1 = {
-	.pci_ops		= &bcm3383_pcie_ops,
-	.io_resource 	= &bcm3383_io_resource,
-	.mem_resource	= &bcm3383_mem1_resource,
-	.busn_resource	= &bcm3383_busn_resource,
+	.mem_resource	= &bcm3383_res_pci_mem,
+	//.mem_offset		= 0xa0000000,
+	.io_resource 	= &bcm3383_res_pci_io,
+	//.io_offset = 0,
+	//.io_map_base = 0
 };
 
 static void bcm3383_gpio_set_out(unsigned gpio)
@@ -398,7 +435,7 @@ static void bcm3383_pcie_power_up(int port)
 
 	*BCM3383_PCIE_HARD_DEBUG_REG(port) &= ~BCM3383_PCIE_SERDES_IDDQ;
 
-	if (0) {
+	if (1) {
 		bcm3383_pcie_phy_mode_cfg(port);
 	}
 
@@ -409,8 +446,7 @@ static void bcm3383_pcie_power_up(int port)
 
 static int bcm3383_pcie_power_down(int port)
 {
-	
-
+	return -1;
 }
 
 static int bcm3383_pcie_init_port(int port)
@@ -515,10 +551,44 @@ static int bcm3383_pcie_init_port(int port)
 
 static int bcm3383_pci_probe(struct platform_device *pdev)
 {
-	bcm3383_pcie_init_port(0);
-	bcm3383_pcie_init_port(1);
-	register_pci_controller(&bcm3383_pcie0);
-	register_pci_controller(&bcm3383_pcie1);
+	struct resource *res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res) {
+		return -EINVAL;
+	}
+
+#ifdef IOREMAP
+	base_addr[0] = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(base_addr[0])) {
+		dev_info(&pdev->dev, "ioremap failed for pcie memory\n");
+		return PTR_ERR(base_addr[0]);
+	}
+#else
+	base_addr[0] = KSEG1ADDR(res->start);
+#endif
+	base_addr[1] = base_addr[0] + 0x9000;
+
+	dev_info(&pdev->dev, "base=[%08x %08x]\n", base_addr[0], base_addr[1]);
+
+	iomem_resource.start = 0;
+	iomem_resource.end = ~0;
+	ioport_resource.start = 0;
+	ioport_resource.end = ~0;
+
+	if (bcm3383_pcie_init_port(0)) {
+#ifdef OFMEM
+		pci_load_of_ranges(&bcm3383_controller, pdev->dev.of_node);
+#endif
+		dev_info(&pdev->dev, "mem: %08x-%08x\n", bcm3383_controller.mem_resource->start,
+				bcm3383_controller.mem_resource->end);
+		register_pci_controller(&bcm3383_controller);
+	}
+
+	/*
+	if (bcm3383_pcie_init_port(1)) {
+		register_pci_controller(&bcm3383_pcie1);
+	}
+	*/
+
 	return 0;
 }
 
@@ -532,20 +602,9 @@ int pcibios_plat_dev_init(struct pci_dev *dev)
 	return 0;
 }
 
-static u8 pci_read8(struct pci_dev *dev, int where)
-{
-	u8 data;
-	if (pci_read_config_byte(dev, 0x19, &data) == 0) {
-		return data;
-	} else {
-		return 0xff;
-	}
-}
-
-static void bcm3383_pcie_fixup(struct pci_dev *dev)
+static void bcm3383_pcie_fixup_early(struct pci_dev *dev)
 {
 	u32 dword;
-
 	dev->class = 0x0604 << 8;
 
 	pci_write_config_dword(dev, 0x18, 0x00010100);
@@ -566,7 +625,75 @@ static void bcm3383_pcie_fixup(struct pci_dev *dev)
 	*/
 }
 
-DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_BROADCOM, 0x3383, bcm3383_pcie_fixup);
+#define BCM_MEM_LIMIT_BASE 0x20
+#define BCM_PREF_LIMIT_BASE 0x24
+#define BCM_PREF_BASE_UPPER32 0x28
+#define BCM_PREF_LIMIT_UPPER32 0x2c
+
+static void bcm3383_pcie_fixup_final(struct pci_dev *dev)
+{
+	u32 tmp, base = /*pcie_dev_r32(dev, PCI_BASE_ADDRESS_0) & 0xfffffff0*/ 0xa0000000;
+
+	dev_info(&dev->dev, "base=%08x\n", base);
+
+	//pcie_dev_w32(dev, BCM_MEM_LIMIT_BASE, 0xfff0);
+	//pcie_dev_w32(dev, BCM_PREF_BASE_UPPER32, 0);
+	//pcie_dev_w32(dev, BCM_PREF_LIMIT_UPPER32, 0);
+	
+	pcie_core_w32(BCM_PREF_LIMIT_BASE, 0xa0f0fff0);
+
+	tmp = (base & 0xffff0000) | (base + 0xffffff);
+	dev_info(&dev->dev, "limit=%08x\n", tmp);
+	pcie_core_w32(BCM_MEM_LIMIT_BASE, tmp);
+
+	// PCIE_MISC_CPU2_PCI_MEM_WIN0_LO
+	pcie_core_w32(0x400c, base); // 0xa0000000
+
+	tmp = ((base + 0xffffff) & (0xfff00000)) | (base >> 16);
+	dev_info(&dev->dev, "base_limit=%08x\n", tmp);
+
+	// PCIE_MISC_CPU_2_PCI_MEM_WIN0_BASE_LIMIT
+	pcie_core_w32(0x4070, tmp); // 0xa0f0a000
+
+	// PCIE_MISC_RC_BAR2_CONFIG_LO
+	pcie_core_w32(0x4034, 0x0c);
+
+	// PCIE_MISC_RC_BAR3_CONFIG_LO
+	pcie_core_w32(0x403c, 0x1000000c);
+
+	pcie_core_w32(0x188, 8);
+
+	tmp = pcie_core_r32(0x406c);
+
+	dev_info(&dev->dev, "PCIe rev %d.%d\n", (tmp >> 8) & 0xff, tmp & 0xff);
+
+	// PCIE_MISC_REVISION
+	if (pcie_core_r32(0x406c) >= 0x0202) {
+		// PCIE_MISC_UBUS_BAR2_CONFIG = ACCESS_EN
+		pcie_core_w32(0x408c, 1);
+		// PCIE_MISC_UBUS_BAR3_CONFIG = ACCESS_EN
+		pcie_core_w32(0x4090, 1);
+
+		if (true /* unknown */) {
+			/* PCIE_PHY_CTRL_1 |= REG_POWERDOWN_P1_PLL_ENA */
+			pcie_core_w32(0x1804, pcie_core_r32(0x1804) | (1 << 23));
+		}
+	} else {
+		// PCIE_MISC_CTRL
+		pcie_core_w32(0x4008, 0x60001000);
+		// PCIE_MISC_UBUS_TIMEOUT
+		pcie_core_w32(0x4084, 0);
+	}
+
+	// PCIE_MISC_UBUS_CTRL
+	pcie_core_w32(0x4080, 0x2220);
+
+	// PCIE_CPU_INTR1_MASK_CLEAR
+	pcie_core_w32(0x830c, 2);
+}
+
+DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_BROADCOM, 0x3383, bcm3383_pcie_fixup_early);
+DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_BROADCOM, 0x3383, bcm3383_pcie_fixup_final);
 
 static const struct of_device_id bcm3383_of_ids[] = {
 	{ .compatible = "brcm,bcm3383-pci" },
