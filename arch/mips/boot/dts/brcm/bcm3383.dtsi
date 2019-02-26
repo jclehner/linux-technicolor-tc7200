@@ -184,7 +184,7 @@
 			#address-cells = <3>;
 			#size-cells = <2>;
 
-			ranges = <0x02000000 0 0xa0000000 0xa0000000 0 0x10000000>;
+			ranges = <0x02000000 0 0xd0000000 0xd0000000 0 0x10000000>;
 
 			interrupt-parent = <&periph_intc>;
 			interrupts = <15 16>;

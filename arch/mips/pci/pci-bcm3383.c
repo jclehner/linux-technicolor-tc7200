@@ -94,7 +94,7 @@ static inline void __iomem *pcie_base(struct pci_bus *bus)
 #else
 static inline u32 pcie_base(struct pci_bus *bus)
 {
-	return base_addr[bus->number == 0 ? BRIDGE : DEVICE];
+	return base_addr[(!bus || bus->number == 0) ? BRIDGE : DEVICE];
 }
 #endif
 
@@ -298,7 +298,7 @@ static int bcm3383_pcie_write(struct pci_bus *bus, unsigned devfn,
 	u32 status, data;
 	int err = PCIBIOS_DEVICE_NOT_FOUND;
 
-	if (!bcm3383_pcie_can_access(bus->number, devfn)) {
+	if (!bcm3383_pcie_can_access(bus ? bus->number : 0, devfn)) {
 		return PCIBIOS_DEVICE_NOT_FOUND;
 	}
 
@@ -331,6 +331,8 @@ static struct pci_ops bcm3383_pcie_ops = {
 	.read = bcm3383_pcie_read,
 	.write = bcm3383_pcie_write
 };
+
+#define OFMEM
 
 static struct resource bcm3383_res_pci_io;
 static struct resource bcm3383_res_pci_mem
@@ -447,6 +449,125 @@ static void bcm3383_pcie_power_up(int port)
 static int bcm3383_pcie_power_down(int port)
 {
 	return -1;
+}
+
+
+#define BCM_MEM_LIMIT_BASE 0x20
+#define BCM_PREF_LIMIT_BASE 0x24
+#define BCM_PREF_BASE_UPPER32 0x28
+#define BCM_PREF_LIMIT_UPPER32 0x2c
+
+#define PCIE_ID_VAL3				0x043c
+#define PCIE_CONFIG2				0x408
+#define PCIE_PHY_CTRL_1				0x1804
+#define PCIE_MISC_CTRL				0x4008
+#define PCIE_MEM_WIN0_LO			0x400c
+#define PCIE_MEM_WIN0_BASE_LIMIT	0x4070
+#define PCIE_BAR1_CONFIG_LO			0x4030
+#define PCIE_BAR2_CONFIG_LO			0x4034
+#define PCIE_BAR3_CONFIG_LO			0x403c
+#define PCIE_REVISION				0x406c
+#define PCIE_UBUS_CTRL				0x4080
+#define PCIE_UBUS_TIMEOUT			0x4084
+#define PCIE_UBUS_BAR1_CFG_REMAP	0x4088
+#define PCIE_UBUS_BAR2_CFG_REMAP	0x408c
+#define PCIE_UBUS_BAR3_CFG_REMAP	0x4090
+#define PCIE_INTR_MASK_CLEAR		0x830c
+
+#define PCIE_UBUS_BAR_CFG_ACCESS_EN	(1 << 0)
+#define PCIE_POWERDOWN_P1_PLL_ENA	(1 << 23)
+#define PCIE_BAR_CONFIG_LO_128MB	0xc
+#define PCIE_ID_VAL3_CLASS_MASK		0x00ffffff
+#define PCIE_ID_VAL3_CLASS_SHIFT	16
+#define PCIE_CONFIG2_BAR1_SIZE_MASK	0x0000000f
+#define PCIE_INTA					(1 << 1)
+
+static int bcm3383_pcie_init_bridge(int port)
+{
+	u32 val;
+	struct resource *mem = bcm3383_controller.mem_resource;
+	if (!mem) {
+		pr_info("%s: !mem\n", __func__);
+		return -EINVAL;
+	}
+
+#if 1
+	val = (mem->start & 0xfff00000) >> 16;
+	//bcm3383_pcie_write(NULL, 0, PCI_PREF_BASE_UPPER32, 2, 0);
+	//bcm3383_pcie_write(NULL, 0, PCI_PREF_MEMORY_BASE, 2, val);
+	bcm3383_pcie_write(NULL, 0, PCI_MEMORY_BASE, 2, val);
+	bcm3383_pcie_write(NULL, 0, PCI_IO_BASE, 2, 0);
+
+	val = (mem->end & 0xfff00000) >> 16;
+	//bcm3383_pcie_write(NULL, 0, PCI_PREF_LIMIT_UPPER32, 2, 0);
+	//bcm3383_pcie_write(NULL, 0, PCI_PREF_MEMORY_LIMIT, 2, val);
+	bcm3383_pcie_write(NULL, 0, PCI_MEMORY_LIMIT, 2, val);
+	bcm3383_pcie_write(NULL, 0, PCI_IO_LIMIT, 2, 0);
+
+#if 0
+	pcie_core_w32(BCM_PREF_LIMIT_BASE, 0xfff0);
+	pcie_core_w32(BCM_PREF_BASE_UPPER32, 0);
+	pcie_core_w32(BCM_PREF_LIMIT_UPPER32, 0);
+
+	val = (mem->start & 0xffff0000) | mem->end;
+	pcie_core_w32(BCM_MEM_LIMIT_BASE, val);
+	pr_info("%s: limit_base=%08x\n", __func__, val);
+#endif
+
+	val = mem->start & 0xfff00000;
+	pcie_core_w32(PCIE_MEM_WIN0_LO, mem->start & 0xfff00000);
+	pr_info("%s: mem_win0_lo=%08x\n", __func__, val);
+
+	val = (mem->end & 0xfff00000) | (mem->start >> 16);
+	pcie_core_w32(PCIE_MEM_WIN0_BASE_LIMIT, val);	
+	pr_info("%s: mem_win0_base_limit=%08x\n", __func__, val);
+
+#else
+	val = ((mem->end & 0xfff00000) | (mem->start >> 23)) << 4;
+	pcie_core_w32(PCIE_MEM_WIN0_BASE_LIMIT, val);
+
+	val = pcie_core_r32(PCIE_MEM_WIN0_LO) | (mem->start & 0xfff00000);
+	pcie_core_w32(PCIE_MEM_WIN0_LO, val);
+#endif
+
+	pcie_core_w32(PCIE_BAR1_CONFIG_LO, PCIE_BAR_CONFIG_LO_128MB);
+	pcie_core_w32(PCIE_UBUS_BAR1_CFG_REMAP, PCIE_UBUS_BAR_CFG_ACCESS_EN);
+
+	pcie_core_w32(PCIE_BAR2_CONFIG_LO, 0x10000000 | PCIE_BAR_CONFIG_LO_128MB);
+	pcie_core_w32(PCIE_BAR3_CONFIG_LO, PCIE_BAR_CONFIG_LO_128MB);
+
+	pcie_core_w32(0x188, 0x8);
+
+#if 0
+	bcm3383_pcie_cfg_select(1, 0);
+
+	val = pcie_core_r32(PCIE_ID_VAL3) & ~PCIE_ID_VAL3_CLASS_MASK;
+	pcie_core_w32(PCIE_ID_VAL3, val | (PCI_CLASS_BRIDGE_PCI << 8));
+
+	val = pcie_core_r32(PCIE_CONFIG2) & ~PCIE_CONFIG2_BAR1_SIZE_MASK;
+	pcie_core_w32(PCIE_CONFIG2, val);
+#endif
+
+	val = pcie_core_r32(PCIE_REVISION);
+	pr_info("%s: PCIe rev %d.%d\n", __func__, (val >> 8) & 0xff, val & 0xff);
+
+	if (val >= 0x0202) {
+		pcie_core_w32(PCIE_UBUS_BAR2_CFG_REMAP, PCIE_UBUS_BAR_CFG_ACCESS_EN);
+		pcie_core_w32(PCIE_UBUS_BAR3_CFG_REMAP, PCIE_UBUS_BAR_CFG_ACCESS_EN);
+
+		if (true /* FIXME */) {
+			val = pcie_core_r32(PCIE_PHY_CTRL_1) | PCIE_POWERDOWN_P1_PLL_ENA;
+			pcie_core_w32(PCIE_PHY_CTRL_1, val);
+		}
+	} else {
+		pcie_core_w32(PCIE_MISC_CTRL, 0x60001000);
+		pcie_core_w32(PCIE_UBUS_TIMEOUT, 0);
+	}
+
+	pcie_core_w32(PCIE_UBUS_CTRL, 0x2220);
+	pcie_core_w32(PCIE_INTR_MASK_CLEAR, PCIE_INTA);
+
+	return 0;
 }
 
 static int bcm3383_pcie_init_port(int port)
@@ -578,6 +699,8 @@ static int bcm3383_pci_probe(struct platform_device *pdev)
 #ifdef OFMEM
 		pci_load_of_ranges(&bcm3383_controller, pdev->dev.of_node);
 #endif
+		//bcm3383_pcie_init_bridge(0);
+
 		dev_info(&pdev->dev, "mem: %08x-%08x\n", bcm3383_controller.mem_resource->start,
 				bcm3383_controller.mem_resource->end);
 		register_pci_controller(&bcm3383_controller);
@@ -625,13 +748,11 @@ static void bcm3383_pcie_fixup_early(struct pci_dev *dev)
 	*/
 }
 
-#define BCM_MEM_LIMIT_BASE 0x20
-#define BCM_PREF_LIMIT_BASE 0x24
-#define BCM_PREF_BASE_UPPER32 0x28
-#define BCM_PREF_LIMIT_UPPER32 0x2c
-
 static void bcm3383_pcie_fixup_final(struct pci_dev *dev)
 {
+	bcm3383_pcie_init_bridge(0);
+	return;
+
 	u32 tmp, base = /*pcie_dev_r32(dev, PCI_BASE_ADDRESS_0) & 0xfffffff0*/ 0xa0000000;
 
 	dev_info(&dev->dev, "base=%08x\n", base);
